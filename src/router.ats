@@ -15,7 +15,7 @@ class Router {
     this.name = name;
     this.parent = parent || null;
     this.navigating = false;
-    this.ports = {};
+    this.outlets = {};
     this.children = {};
     this.registry = grammar;
     this.pipeline = pipeline;
@@ -41,7 +41,7 @@ class Router {
    * You probably don't need to use this unless you're writing a reusable component.
    */
   registerOutlet(view, name = 'default') {
-    this.ports[name] = view;
+    this.outlets[name] = view;
     return this.renavigate();
   }
 
@@ -127,12 +127,12 @@ class Router {
    * given a instruction obj
    * update outlets accordingly
    */
-  activatePorts(instruction) {
-    return this.queryOutlets((port, name) => {
-      return port.activate(instruction.outlets[name]);
+  activateOutlets(instruction) {
+    return this.queryOutlets((outlet, name) => {
+      return outlet.activate(instruction.outlets[name]);
     })
     .then(() => mapObjAsync(instruction.outlets, (instruction) => {
-      return instruction.router.activatePorts(instruction);
+      return instruction.router.activateOutlets(instruction);
     }));
   }
 
@@ -141,19 +141,19 @@ class Router {
    * given a instruction obj
    * update outlets accordingly
    */
-  canDeactivatePorts(instruction) {
-    return this.traversePorts((port, name) => {
-      return boolToPromise(port.canDeactivate(instruction.outlets[name]));
+  canDeactivateOutlets(instruction) {
+    return this.traverseOutlets((outlet, name) => {
+      return boolToPromise(outlet.canDeactivate(instruction.outlets[name]));
     });
   }
 
-  traversePorts(fn) {
+  traverseOutlets(fn) {
     return this.queryOutlets(fn)
-        .then(() => mapObjAsync(this.children, (child) => child.traversePorts(fn)));
+        .then(() => mapObjAsync(this.children, (child) => child.traverseOutlets(fn)));
   }
 
   queryOutlets(fn) {
-    return mapObjAsync(this.ports, fn);
+    return mapObjAsync(this.outlets, fn);
   }
 
 

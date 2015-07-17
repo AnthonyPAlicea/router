@@ -46,19 +46,22 @@ function controllerProviderDecorator($controllerProvider, $controllerIntrospecto
  */
 function $controllerIntrospectorProvider() {
   var controllers = [];
-  var controllersByName = {};
+  var constructorsByName = {};
   var onControllerRegistered = null;
+
+  function getController(constructor) {
+    return angular.isArray(constructor) ? constructor[constructor.length - 1] : constructor;
+  }
+
   return {
     register: function (name, constructor) {
-      if (angular.isArray(constructor)) {
-        constructor = constructor[constructor.length - 1];
-      }
-      controllersByName[name] = constructor;
-      if (constructor.$routeConfig) {
+      var controller = getController(constructor);
+      constructorsByName[name] = constructor;
+      if (controller.$routeConfig) {
         if (onControllerRegistered) {
-          onControllerRegistered(name, constructor.$routeConfig);
+          onControllerRegistered(name, controller.$routeConfig);
         } else {
-          controllers.push({name: name, config: constructor.$routeConfig});
+          controllers.push({name: name, config: controller.$routeConfig});
         }
       }
     },
@@ -75,7 +78,7 @@ function $controllerIntrospectorProvider() {
       };
 
       fn.getTypeByName = function (name) {
-        return controllersByName[name];
+        return constructorsByName[name];
       };
 
       return fn;
@@ -350,6 +353,9 @@ function anchorLinkDirective($router) {
                      'xlink:href' : 'href';
 
       element.on('click', function(event) {
+        if (event.which !== 1)
+          return;
+
         var href = element.attr(hrefAttrName);
         if (!href) {
           event.preventDefault();
@@ -397,7 +403,7 @@ function initLocalsStepFactory($componentMapper, $controllerIntrospector) {
 
 function runCanDeactivateHookStepFactory() {
   return function runCanDeactivateHook(instruction) {
-    return instruction.router.canDeactivatePorts(instruction);
+    return instruction.router.canDeactivateOutlets(instruction);
   };
 }
 
@@ -430,7 +436,7 @@ function loadTemplatesStepFactory($componentMapper, $templateRequest) {
 
 
 function activateStepValue(instruction) {
-  return instruction.router.activatePorts(instruction);
+  return instruction.router.activateOutlets(instruction);
 }
 
 
@@ -477,7 +483,7 @@ function pipelineProvider() {
 
 
 /**
- * @name $componentMapperFactory
+ * @name $componentMapper
  * @description
  *
  * This lets you configure conventions for what controllers are named and where to load templates from.

@@ -7,16 +7,14 @@ describe('ngOutlet', function () {
       $rootScope,
       $router,
       $templateCache,
-      $controllerProvider,
-      $componentMapperProvider;
+      $controllerProvider;
 
 
   beforeEach(function() {
     module('ng');
     module('ngNewRouter');
-    module(function(_$controllerProvider_, _$componentMapperProvider_) {
+    module(function(_$controllerProvider_) {
       $controllerProvider = _$controllerProvider_;
-      $componentMapperProvider = _$componentMapperProvider_;
     });
 
     inject(function(_$compile_, _$rootScope_, _$router_, _$templateCache_) {
@@ -113,21 +111,21 @@ describe('ngOutlet', function () {
       { path: '/',         component:  {left: 'one', right: 'two'} },
       { path: '/switched', components: {left: 'two', right: 'one'} }
     ]);
-    compile('port 1: <div ng-outlet="left"></div> | ' +
-            'port 2: <div ng-outlet="right"></div>');
+    compile('outlet 1: <div ng-outlet="left"></div> | ' +
+            'outlet 2: <div ng-outlet="right"></div>');
 
     $router.navigate('/');
     $rootScope.$digest();
-    expect(elt.text()).toBe('port 1: one | port 2: two');
+    expect(elt.text()).toBe('outlet 1: one | outlet 2: two');
 
     $router.navigate('/switched');
     $rootScope.$digest();
-    expect(elt.text()).toBe('port 1: two | port 2: one');
+    expect(elt.text()).toBe('outlet 1: two | outlet 2: one');
   });
 
 
   it('should work with nested outlets', function () {
-    registerComponent('childRouter', '<div>inner { <div ng-outlet></div> }</div>', [
+    registerComponent('childRouter', '<div>inner { <div ng-outlet></div> }</div>', undefined, [
       { path: '/b', component: 'one' }
     ]);
 
@@ -282,6 +280,24 @@ describe('ngOutlet', function () {
 
     expect(injectedScope).toBeDefined();
   });
+
+
+  it('should inject controller constructors that use the array notation for dependency injection', inject(function ($http) {
+    var injectedHttp;
+    registerComponent('user', '', ['$http', function (differentName) {
+      injectedHttp = differentName;
+    }]);
+
+    $router.config([
+      { path: '/user', component: 'user' }
+    ]);
+    compile('<div ng-outlet></div>');
+
+    $router.navigate('/user');
+    $rootScope.$digest();
+
+    expect(injectedHttp).toBe($http);
+  }));
 
 
   it('should run the deactivate hook of controllers', function () {
@@ -568,7 +584,7 @@ describe('ngOutlet', function () {
 
   // TODO: test injecting $scope
 
-  it('should navigate when a link url matches a route', function () {
+  it('should navigate on left-mouse click when a link url matches a route', function () {
     $router.config([
       { path: '/', component: 'one' },
       { path: '/two', component: 'two' },
@@ -582,6 +598,23 @@ describe('ngOutlet', function () {
     $rootScope.$digest();
     expect(elt.text()).toBe('link | two');
   });
+
+
+  it('should not navigate on non-left mouse click when a link url matches a route', inject(function ($router) {
+    $router.config([
+      { path: '/', component: 'one' },
+      { path: '/two', component: 'two' },
+    ]);
+
+    compile('<a href="./two">link</a> | <div ng-outlet></div>');
+    $rootScope.$digest();
+    expect(elt.text()).toBe('link | one');
+    elt.find('a').triggerHandler({ type: 'click', which: 3 });
+
+    $rootScope.$digest();
+    expect(elt.text()).toBe('link | one');
+  }));
+
 
   // See https://github.com/angular/router/issues/206
   it('should not navigate a link without an href', function () {
@@ -620,7 +653,7 @@ describe('ngOutlet', function () {
       { path: '/new-parent', component:  'childRouter' }
     ]);
 
-    registerComponent('childRouter', '<div>inner { <div ng-outlet></div> }</div>', [
+    registerComponent('childRouter', '<div>inner { <div ng-outlet></div> }</div>', undefined, [
       { path: '/old-child', redirectTo: '/new-child' },
       { path: '/new-child', component: 'one'},
       { path: '/old-child-two', redirectTo: '/new-child-two' },
@@ -669,27 +702,27 @@ describe('ngOutlet', function () {
   });
 
 
-  function registerComponent(name, template, config) {
+  function registerComponent(name, template, componentConstructor, routeConfig) {
     if (!template) {
       template = '';
     }
     var Ctrl;
-    if (!config) {
+    componentConstructor = componentConstructor || function() {};
+    if (angular.isArray(componentConstructor)) {
+      Ctrl = componentConstructor[componentConstructor.length - 1];
+    } else if (angular.isFunction(componentConstructor)) {
+      Ctrl = componentConstructor;
+    } else if (angular.isObject(componentConstructor)) {
       Ctrl = function () {};
-    } else if (angular.isArray(config)) {
-      Ctrl = function () {};
-      Ctrl.$routeConfig = config;
-    } else if (typeof config === 'function') {
-      Ctrl = config;
-    } else {
-      Ctrl = function () {};
-      if (config.canActivate) {
-        Ctrl.canActivate = config.canActivate;
-        delete config.canActivate;
+      if (componentConstructor.canActivate) {
+        Ctrl.canActivate = componentConstructor.canActivate;
+        delete componentConstructor.canActivate;
       }
-      Ctrl.prototype = config;
+      Ctrl.prototype = componentConstructor;
+      componentConstructor = Ctrl;
     }
-    $controllerProvider.register(componentControllerName(name), Ctrl);
+    Ctrl.$routeConfig = routeConfig;
+    $controllerProvider.register(componentControllerName(name), componentConstructor);
     put(name, template);
   }
 
